@@ -1,0 +1,24 @@
+# Medallion schemas plus the landing volume the daily bulletin PDFs are uploaded to.
+# The catalog itself is created once by hand (see README): bundles manage schemas, not catalogs.
+resources:
+  schemas:
+    bronze:
+      catalog_name: ${var.catalog}
+      name: bronze
+      comment: Raw rows parsed from CME Daily Bulletin Section 64, one row per bulletin line
+    silver:
+      catalog_name: ${var.catalog}
+      name: silver
+      comment: Cleaned option rows with inferred put/call side and expiry
+    gold:
+      catalog_name: ${var.catalog}
+      name: gold
+      comment: SD bands, OI walls, max pain, GEX and playbook backtests
+
+  volumes:
+    landing:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.bronze.name}
+      name: landing
+      volume_type: MANAGED
+      comment: Daily Bulletin PDFs, uploaded once per trade date

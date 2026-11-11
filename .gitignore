@@ -1,0 +1,22 @@
+# Secrets
+.env
+
+# Market data is licensed by CME: never commit bulletins or anything parsed from them
+*.pdf
+data/
+
+# Databricks bundle state
+.databricks/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

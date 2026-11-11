@@ -1,0 +1,27 @@
+bundle:
+  name: gold_options_lakehouse
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog that holds every schema of this project
+    default: gold_options_dev
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-abd11c35-2b32.cloud.databricks.com
+    variables:
+      catalog: gold_options_dev
+
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-abd11c35-2b32.cloud.databricks.com
+      root_path: /Workspace/Users/stampnapatt@gmail.com/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: gold_options_prod
