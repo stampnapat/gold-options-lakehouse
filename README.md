@@ -27,6 +27,7 @@ Databricks Asset Bundles, Python with `pdfplumber`, pytest, GitHub Actions.
 ## Setup
 
 1. Log in: `databricks auth login --host https://dbc-abd11c35-2b32.cloud.databricks.com`
-2. Create the catalog once (bundles manage schemas, not catalogs):
-   `databricks catalogs create gold_options_dev`
+2. Create the catalog `gold_options_dev` once in the UI (**Catalog → + → Create a
+   catalog**, storage: *Default Storage*). Bundles manage schemas, not catalogs, and on
+   Free Edition the API cannot create a catalog on Default Storage.
 3. Deploy schemas and the landing volume: `databricks bundle deploy -t dev`
