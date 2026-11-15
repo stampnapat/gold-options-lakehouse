@@ -36,10 +36,25 @@ jobs:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
     steps:
+      # Forks and fresh clones have no Databricks secrets: skip with a notice
+      # instead of failing the whole run.
+      - name: Check credentials
+        id: creds
+        run: |
+          if [ -n "$DATABRICKS_HOST" ] && [ -n "$DATABRICKS_TOKEN" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::DATABRICKS_HOST / DATABRICKS_TOKEN secrets not set; skipping deploy."
+          fi
       - uses: actions/checkout@v4
+        if: steps.creds.outputs.ok == 'true'
       - uses: astral-sh/setup-uv@v6  # the bundle builds the parser wheel with uv
+        if: steps.creds.outputs.ok == 'true'
       - uses: databricks/setup-cli@main
+        if: steps.creds.outputs.ok == 'true'
       - name: Validate
+        if: steps.creds.outputs.ok == 'true'
         run: databricks bundle validate -t dev
       - name: Deploy
+        if: steps.creds.outputs.ok == 'true'
         run: databricks bundle deploy -t dev
