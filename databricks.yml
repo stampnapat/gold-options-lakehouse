@@ -1,6 +1,13 @@
 bundle:
   name: gold_options_lakehouse
 
+# The parser ships to the pipeline as a wheel, so Spark workers can import it.
+artifacts:
+  cme_bulletin:
+    type: whl
+    build: uv build --wheel
+    path: .
+
 include:
   - resources/*.yml
 

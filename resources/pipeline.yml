@@ -1,0 +1,18 @@
+resources:
+  pipelines:
+    gold_options:
+      name: gold_options_${bundle.target}
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true
+      continuous: false
+      root_path: ../src/pipeline
+      libraries:
+        - glob:
+            include: ../src/pipeline/**
+      environment:
+        dependencies:
+          - ../dist/*.whl  # cme_bulletin + its pdfplumber dependency
+      configuration:
+        catalog: ${var.catalog}
+        landing_path: /Volumes/${var.catalog}/bronze/landing/section64
