@@ -51,6 +51,19 @@ Databricks Asset Bundles, Python with `pdfplumber`, pytest, GitHub Actions.
 | `bronze.block_totals` | bulletin TOTAL lines vs. the sum of parsed rows (expectation: equal) |
 | `bronze.parse_rejects` | gold lines the parser could not read (should stay empty) |
 | `silver.option_series` | one row per series (side, expiry, strike) per trade date, FINAL bulletin preferred |
+| `gold.strike_profile` | calls and puts side by side per strike for every live expiry |
+| `gold.expiry_levels` | per trade date and expiry: forward, ATM vol, 1-3 SD bands, put/call walls inside 2 SD, max pain, GEX, gamma flip; `expiry_rank = 1` is the next day's daily option |
+
+Levels are computed by `src/options_math/levels.py` (pure Python, unit tested).
+Vols are annualized on business days / 252; SD bands are lognormal around the
+forward. GEX assumes dealers are long calls and short puts (the common public
+convention), so it shows positioning, not a known dealer book.
+
+**After changing parser or inference code**, recompute the views; a materialized
+view whose source tables did not change is otherwise left as it was:
+
+    databricks bundle run gold_options -t dev --full-refresh \
+      gold_options_dev.silver.option_series,gold_options_dev.gold.strike_profile,gold_options_dev.gold.expiry_levels
 
 ### Inferring side and expiry
 

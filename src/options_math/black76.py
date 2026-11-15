@@ -89,3 +89,8 @@ def implied_forward(side: str, strike: float, premium: float, abs_delta: float):
             return fwd(v), v
         prev, g_prev = v, g
     return None
+
+
+def gamma(forward: float, strike: float, v: float) -> float:
+    """dDelta/dF per 1.0 move in the futures price."""
+    return _N.pdf(_d1(forward, strike, v)) / (forward * v)
