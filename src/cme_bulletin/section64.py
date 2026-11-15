@@ -236,7 +236,7 @@ def parse_lines(lines: Iterable[tuple[int, int, str]]) -> ParseResult:
     return result
 
 
-def extract_lines(pdf) -> list[tuple[int, int, str]]:
+def extract_lines(pdf, max_pages: int | None = None) -> list[tuple[int, int, str]]:
     """Text lines of a bulletin PDF (path, file object or bytes) as (page, line_no, text)."""
     import io
 
@@ -245,14 +245,23 @@ def extract_lines(pdf) -> list[tuple[int, int, str]]:
     source = io.BytesIO(pdf) if isinstance(pdf, bytes | bytearray) else pdf
     out = []
     with pdfplumber.open(source) as doc:
-        for page_no, page in enumerate(doc.pages, start=1):
+        for page_no, page in enumerate(doc.pages[:max_pages], start=1):
             for line_no, text in enumerate((page.extract_text() or "").splitlines(), start=1):
                 out.append((page_no, line_no, text))
+            # pdfplumber caches every character object of every page it has read;
+            # release each page, or a 70-page bulletin needs > 1 GB (the
+            # serverless UDF memory limit).
+            page.close()
     return out
 
 
 def parse_pdf(pdf) -> ParseResult:
     return parse_lines(extract_lines(pdf))
+
+
+def read_header(pdf) -> ParseResult:
+    """Trade date, bulletin number and FINAL/PRELIMINARY from page 1 only (fast)."""
+    return parse_lines(extract_lines(pdf, max_pages=1))
 
 
 if __name__ == "__main__":

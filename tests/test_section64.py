@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from parser.section64 import parse_lines, parse_strike_row
+from cme_bulletin.section64 import parse_lines, parse_strike_row
 
 HEADER = [
     "PG64 BULLETIN # 101@ METALS OPTION PRODUCTS Tue, Mar 03, 2026 PG64",
