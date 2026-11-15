@@ -35,6 +35,9 @@ from . import calendar as cal
 
 DELTA_TOL = 0.01  # one score unit = 0.01 of delta error ...
 SIGMA_TOL = 0.15  # ... or 15% away from the reference vol
+MAX_SIGMA_LOG_ERROR = math.log(3)  # reject fits with vol < 1/3 or > 3x the smile
+INTRINSIC_TOL = 0.15  # settlement vs intrinsic (forward is read to ~0.1)
+EXPIRED_DELTA = 0.9999  # printed delta of an option settled on its last day
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,8 @@ def _hypotheses(row, trade_date, candidates, curve, smile, scale):
             sigma = v / math.sqrt(t)
             d_err = abs(black76.delta(side, forward, row.strike, v) - row.delta)
             s_err = abs(math.log(sigma / (_interp(smile, row.strike) * scale)))
+            if s_err > MAX_SIGMA_LOG_ERROR:
+                continue  # a vol this far off the smile is not a real fit
             score = d_err / DELTA_TOL + s_err / SIGMA_TOL
             out.append((score, side, expiry, underlying, forward, sigma, d_err))
     return sorted(out, key=lambda h: h[0])
@@ -128,7 +133,7 @@ def _intrinsic_side(row, curve, expiry: date) -> str | None:
         return None
     gaps = {s: abs(black76.price(s, forward, row.strike, 0.0) - row.settle) for s in "CP"}
     side = min(gaps, key=gaps.get)
-    return side if gaps[side] <= max(1.0, 0.002 * forward) else None
+    return side if gaps[side] <= INTRINSIC_TOL else None
 
 
 def infer(rows, trade_date: date) -> list[Inference]:
@@ -146,16 +151,13 @@ def infer(rows, trade_date: date) -> list[Inference]:
                 dates = cal.weekly_expiries(r.product_code, r.contract_month)
                 expiry = dates[0] if dates else None
             underlying = cal.underlying_for(expiry) if expiry else None
+            forward = curve.get(underlying)
+            sigma = None
+            if forward and r.settle and expiry and expiry > trade_date:
+                v = black76.implied_v(r.side, forward, r.strike, r.settle)
+                sigma = v / math.sqrt(years_to(trade_date, expiry)) if v else None
             result[i] = Inference(
-                r.side,
-                expiry,
-                underlying,
-                curve.get(underlying),
-                None,
-                None,
-                None,
-                None,
-                "printed",
+                r.side, expiry, underlying, forward, sigma, None, None, None, "printed"
             )
         else:
             weekly[(r.product_code, r.contract_month)].append(i)
@@ -184,9 +186,19 @@ def infer(rows, trade_date: date) -> list[Inference]:
             by_strike[rows[i].strike].append(i)
 
         for strike_idxs in by_strike.values():
+            # Options expiring on the trade date settle at intrinsic with delta 1;
+            # take them out first so they cannot claim a live expiry.
+            expired = {
+                i
+                for i in strike_idxs
+                if expiring
+                and rows[i].delta is not None
+                and rows[i].delta >= EXPIRED_DELTA
+                and _intrinsic_side(rows[i], curve, expiring)
+            }
             hyps = {
                 i: _hypotheses(rows[i], trade_date, live, curve, smile, scale)
-                if smile and rows[i].settle and rows[i].delta
+                if smile and rows[i].settle and rows[i].delta and i not in expired
                 else []
                 for i in strike_idxs
             }

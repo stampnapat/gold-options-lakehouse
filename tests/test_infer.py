@@ -87,3 +87,19 @@ def test_far_wing_with_min_tick_and_no_delta_gets_side_only(bulletin):
     wing = OptionRow(**{**wing.__dict__, "settle": 0.1, "delta": None})
     result = infer(rows + [wing], TRADE_DATE)[-1]
     assert (result.method, result.side, result.expiry) == ("moneyness", "P", None)
+
+
+def test_options_expiring_on_trade_date_are_not_pushed_to_a_live_week(bulletin):
+    """Monday bulletin: Monday's weekly settled at intrinsic (delta 1, OI 0). Those rows
+    once fitted a later Monday as puts with near-zero vol."""
+    rows, _, _ = bulletin
+    live = [row("GMW MON", "NOV26", s, k, date(2026, 11, 16)) for k in (3950, 4050) for s in "CP"]
+    expired = [
+        OptionRow(**{**row("GMW MON", "NOV26", "C", k, date(2026, 11, 16)).__dict__,
+                     "settle": 4000.0 - k, "delta": 1.0, "open_interest": 0})
+        for k in (3950, 3975)
+    ]  # fmt: skip
+    result = infer(rows + live + expired, TRADE_DATE)[-2:]
+    assert [(x.method, x.side, x.expiry) for x in result] == [
+        ("intrinsic", "C", TRADE_DATE), ("intrinsic", "C", TRADE_DATE),
+    ]  # fmt: skip
