@@ -1,0 +1,762 @@
+{
+  "datasets": [
+    {
+      "name": "next_levels",
+      "displayName": "Next expiry levels",
+      "queryLines": [
+        "SELECT trade_date, expiry, product_code, forward, atm_vol, max_pain, gamma_flip, put_wall, call_wall,\n",
+        "       sd1_low, sd1_high, sd2_low, sd2_high, put_call_oi_ratio\n",
+        "FROM gold.expiry_levels\n",
+        "WHERE trade_date = (SELECT max(trade_date) FROM gold.expiry_levels) AND expiry_rank = 1"
+      ]
+    },
+    {
+      "name": "next_strikes",
+      "displayName": "Next expiry OI and volume by strike",
+      "queryLines": [
+        "SELECT p.strike, s.side, s.open_interest, s.volume\n",
+        "FROM gold.strike_profile p\n",
+        "JOIN gold.expiry_levels l USING (trade_date, expiry)\n",
+        "LATERAL VIEW stack(2, 'Call', p.call_oi, p.call_volume, 'Put', p.put_oi, p.put_volume) s AS side, open_interest, volume\n",
+        "WHERE p.trade_date = (SELECT max(trade_date) FROM gold.expiry_levels) AND p.expiry_rank = 1\n",
+        "  AND p.strike BETWEEN l.sd3_low AND l.sd3_high"
+      ]
+    },
+    {
+      "name": "term_structure",
+      "displayName": "Levels by expiry",
+      "queryLines": [
+        "SELECT expiry, product_code, business_days_to_expiry, round(atm_vol * 100, 2) AS atm_vol_pct,\n",
+        "       round(sd1_low, 1) AS sd1_low, round(sd1_high, 1) AS sd1_high, max_pain, put_wall, call_wall,\n",
+        "       round(gamma_flip, 1) AS gamma_flip, round(put_call_oi_ratio, 2) AS put_call_oi\n",
+        "FROM gold.expiry_levels\n",
+        "WHERE trade_date = (SELECT max(trade_date) FROM gold.expiry_levels) AND expiry_rank <= 10"
+      ]
+    },
+    {
+      "name": "history",
+      "displayName": "Next-expiry levels over time",
+      "queryLines": [
+        "SELECT trade_date, s.level, s.price\n",
+        "FROM gold.expiry_levels\n",
+        "LATERAL VIEW stack(4, 'Forward', forward, 'Max pain', max_pain, '-1 SD', sd1_low, '+1 SD', sd1_high) s AS level, price\n",
+        "WHERE expiry_rank = 1"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "next_expiry",
+      "displayName": "Next expiry",
+      "layout": [
+        {
+          "widget": {
+            "name": "title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Gold daily options: next expiry\n",
+                "From the latest CME Daily Bulletin (Section 64). Levels are for the option expiring on the next business day. GEX assumes dealers long calls and short puts."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "c_forward",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_levels",
+                  "fields": [
+                    {
+                      "name": "forward",
+                      "expression": "`forward`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "forward",
+                  "displayName": "Futures (forward)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Futures (forward)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "c_vol",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_levels",
+                  "fields": [
+                    {
+                      "name": "atm_vol",
+                      "expression": "`atm_vol`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "atm_vol",
+                  "displayName": "ATM vol",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "ATM vol"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 1,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "c_maxpain",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_levels",
+                  "fields": [
+                    {
+                      "name": "max_pain",
+                      "expression": "`max_pain`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "max_pain",
+                  "displayName": "Max pain"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Max pain"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 1,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "c_flip",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_levels",
+                  "fields": [
+                    {
+                      "name": "gamma_flip",
+                      "expression": "`gamma_flip`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "gamma_flip",
+                  "displayName": "Gamma flip"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Gamma flip"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 1,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "c_putwall",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_levels",
+                  "fields": [
+                    {
+                      "name": "put_wall",
+                      "expression": "`put_wall`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "put_wall",
+                  "displayName": "Put wall (2 SD)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Put wall (2 SD)"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 1,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "c_callwall",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_levels",
+                  "fields": [
+                    {
+                      "name": "call_wall",
+                      "expression": "`call_wall`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "call_wall",
+                  "displayName": "Call wall (2 SD)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Call wall (2 SD)"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 1,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "oi_by_strike",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_strikes",
+                  "fields": [
+                    {
+                      "name": "strike",
+                      "expression": "`strike`"
+                    },
+                    {
+                      "name": "side",
+                      "expression": "`side`"
+                    },
+                    {
+                      "name": "sum(open_interest)",
+                      "expression": "SUM(`open_interest`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "strike",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Strike"
+                },
+                "y": {
+                  "fieldName": "sum(open_interest)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Open interest"
+                },
+                "color": {
+                  "fieldName": "side",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Call",
+                        "color": "#2a78d6"
+                      },
+                      {
+                        "value": "Put",
+                        "color": "#eb6834"
+                      }
+                    ]
+                  },
+                  "displayName": "Side"
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Open interest by strike, next expiry (within 3 SD)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "vol_by_strike",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "next_strikes",
+                  "fields": [
+                    {
+                      "name": "strike",
+                      "expression": "`strike`"
+                    },
+                    {
+                      "name": "side",
+                      "expression": "`side`"
+                    },
+                    {
+                      "name": "sum(volume)",
+                      "expression": "SUM(`volume`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "strike",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Strike"
+                },
+                "y": {
+                  "fieldName": "sum(volume)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Volume"
+                },
+                "color": {
+                  "fieldName": "side",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Call",
+                        "color": "#2a78d6"
+                      },
+                      {
+                        "value": "Put",
+                        "color": "#eb6834"
+                      }
+                    ]
+                  },
+                  "displayName": "Side"
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Volume by strike, next expiry (within 3 SD)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "term_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "term_structure",
+                  "fields": [
+                    {
+                      "name": "expiry",
+                      "expression": "`expiry`"
+                    },
+                    {
+                      "name": "product_code",
+                      "expression": "`product_code`"
+                    },
+                    {
+                      "name": "business_days_to_expiry",
+                      "expression": "`business_days_to_expiry`"
+                    },
+                    {
+                      "name": "atm_vol_pct",
+                      "expression": "`atm_vol_pct`"
+                    },
+                    {
+                      "name": "sd1_low",
+                      "expression": "`sd1_low`"
+                    },
+                    {
+                      "name": "sd1_high",
+                      "expression": "`sd1_high`"
+                    },
+                    {
+                      "name": "max_pain",
+                      "expression": "`max_pain`"
+                    },
+                    {
+                      "name": "put_wall",
+                      "expression": "`put_wall`"
+                    },
+                    {
+                      "name": "call_wall",
+                      "expression": "`call_wall`"
+                    },
+                    {
+                      "name": "gamma_flip",
+                      "expression": "`gamma_flip`"
+                    },
+                    {
+                      "name": "put_call_oi",
+                      "expression": "`put_call_oi`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "expiry",
+                    "displayName": "Expiry",
+                    "type": "date",
+                    "displayAs": "datetime",
+                    "visible": true,
+                    "title": "Expiry"
+                  },
+                  {
+                    "fieldName": "product_code",
+                    "displayName": "Product",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "title": "Product"
+                  },
+                  {
+                    "fieldName": "business_days_to_expiry",
+                    "displayName": "Days",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "Days"
+                  },
+                  {
+                    "fieldName": "atm_vol_pct",
+                    "displayName": "ATM vol %",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "ATM vol %"
+                  },
+                  {
+                    "fieldName": "sd1_low",
+                    "displayName": "-1 SD",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "-1 SD"
+                  },
+                  {
+                    "fieldName": "sd1_high",
+                    "displayName": "+1 SD",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "+1 SD"
+                  },
+                  {
+                    "fieldName": "max_pain",
+                    "displayName": "Max pain",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "Max pain"
+                  },
+                  {
+                    "fieldName": "put_wall",
+                    "displayName": "Put wall",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "Put wall"
+                  },
+                  {
+                    "fieldName": "call_wall",
+                    "displayName": "Call wall",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "Call wall"
+                  },
+                  {
+                    "fieldName": "gamma_flip",
+                    "displayName": "Gamma flip",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "Gamma flip"
+                  },
+                  {
+                    "fieldName": "put_call_oi",
+                    "displayName": "P/C OI",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "title": "P/C OI"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Levels for the next 10 expiries"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "vol_term",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "term_structure",
+                  "fields": [
+                    {
+                      "name": "expiry",
+                      "expression": "`expiry`"
+                    },
+                    {
+                      "name": "atm_vol_pct",
+                      "expression": "`atm_vol_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "expiry",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Expiry"
+                },
+                "y": {
+                  "fieldName": "atm_vol_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "ATM vol %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "ATM vol term structure"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 21,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "history",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "history",
+                  "fields": [
+                    {
+                      "name": "trade_date",
+                      "expression": "`trade_date`"
+                    },
+                    {
+                      "name": "level",
+                      "expression": "`level`"
+                    },
+                    {
+                      "name": "price",
+                      "expression": "`price`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "trade_date",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Bulletin date"
+                },
+                "y": {
+                  "fieldName": "price",
+                  "scale": {
+                    "type": "quantitative",
+                    "zero": false
+                  },
+                  "displayName": "Price"
+                },
+                "color": {
+                  "fieldName": "level",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Level"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Next-expiry forward, max pain and 1 SD band over time"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 21,
+            "width": 3,
+            "height": 5
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+  ]
+}

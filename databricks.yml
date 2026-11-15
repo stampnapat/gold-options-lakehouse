@@ -15,6 +15,10 @@ variables:
   catalog:
     description: Unity Catalog that holds every schema of this project
     default: gold_options_dev
+  warehouse_id:
+    description: SQL warehouse that runs the dashboard queries
+    lookup:
+      warehouse: Serverless Starter Warehouse
 
 targets:
   dev:

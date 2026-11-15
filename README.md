@@ -45,6 +45,15 @@ Databricks Asset Bundles, Python with `pdfplumber`, pytest, GitHub Actions.
    Auto Loader ingests only files it has not seen before, so a manual
    `databricks bundle run gold_options -t dev` is always safe too.
 
+## Dashboard
+
+`dashboards/next_expiry.lvdash.json` is a Databricks AI/BI dashboard deployed by the
+bundle (`resources/dashboard.yml`): headline levels for the next expiry, open
+interest and volume by strike (calls blue, puts orange, within 3 SD), levels for
+the next ten expiries, the ATM vol term structure, and the next-expiry levels over
+time. Queries reference `schema.table` only; `dataset_catalog` points them at the
+target's catalog.
+
 ## CI/CD
 
 `.github/workflows/ci.yml`: every push and pull request runs ruff and pytest; a push

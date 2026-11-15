@@ -1,0 +1,8 @@
+resources:
+  dashboards:
+    next_expiry:
+      display_name: Gold daily options - next expiry (${bundle.target})
+      file_path: ../dashboards/next_expiry.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      # Queries name schema.table only; the catalog follows the target.
+      dataset_catalog: ${var.catalog}
