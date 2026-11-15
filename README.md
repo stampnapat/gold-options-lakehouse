@@ -15,9 +15,10 @@ downloaded by hand from <https://www.cmegroup.com/market-data/daily-bulletin.htm
 once per trade date. CME's website terms forbid automated scraping, so this project
 never fetches it with a script.
 
-Bulletin data belongs to CME Group. **No bulletin PDF or data derived from one is
-committed to this repository** (`*.pdf` and `data/` are git-ignored); it lives only in
-the author's Databricks workspace. Tests use small synthetic fixtures.
+Bulletin data belongs to CME Group. **No bulletin PDF or parsed data set is committed
+to this repository** (`*.pdf` and `data/` are git-ignored); it lives only in the
+author's Databricks workspace. Tests use synthetic bulletins generated from Black-76.
+The README quotes a few aggregate figures used to validate the pipeline.
 
 ## Stack
 
@@ -39,8 +40,16 @@ Databricks Asset Bundles, Python with `pdfplumber`, pytest, GitHub Actions.
    keeps only the previous trade date, so a missed day is lost).
 2. Upload it; the file is renamed from its own header to `<trade_date>_<FINAL|PRELIMINARY>.pdf`:
    `.venv/bin/python scripts/upload_bulletin.py ~/Downloads/Section64_*.pdf`
-3. Run the pipeline: `databricks bundle run gold_options -t dev`. Auto Loader
-   ingests only files it has not seen before, so re-running is safe.
+3. Nothing else: the job `gold_options_refresh_dev` has a **file-arrival trigger** on
+   the landing folder and refreshes the pipeline within about a minute of the upload.
+   Auto Loader ingests only files it has not seen before, so a manual
+   `databricks bundle run gold_options -t dev` is always safe too.
+
+## CI/CD
+
+`.github/workflows/ci.yml`: every push and pull request runs ruff and pytest; a push
+to `main` then validates and deploys the bundle (`dev` target) with the
+`DATABRICKS_HOST` and `DATABRICKS_TOKEN` repository secrets.
 
 ## Pipeline
 

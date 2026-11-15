@@ -1,0 +1,45 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install package with dev tools
+        run: uv venv --python 3.12 && uv pip install -e ".[dev]"
+      - name: Ruff lint
+        run: uv run --no-sync ruff check .
+      - name: Ruff format check
+        run: uv run --no-sync ruff format --check .
+      # Tests use synthetic bulletins only: CME data never enters the repository.
+      - name: Pytest
+        run: uv run --no-sync pytest -v
+
+  deploy:
+    name: Validate and deploy bundle (dev)
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy-dev  # never two deploys at once
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6  # the bundle builds the parser wheel with uv
+      - uses: databricks/setup-cli@main
+      - name: Validate
+        run: databricks bundle validate -t dev
+      - name: Deploy
+        run: databricks bundle deploy -t dev

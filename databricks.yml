@@ -18,12 +18,11 @@ variables:
 
 targets:
   dev:
-    # Not `mode: development`: that mode prefixes every schema with "dev_<user>_",
-    # which is redundant here because each target already has its own catalog.
-    # The one dev-mode behavior we want, paused schedules, is set explicitly.
+    # Not `mode: development`: that mode prefixes every schema with "dev_<user>_"
+    # and pauses triggers. Each target already has its own catalog, and dev is
+    # the environment the daily bulletins are uploaded to, so its file-arrival
+    # trigger must stay live.
     default: true
-    presets:
-      trigger_pause_status: PAUSED
     workspace:
       host: https://dbc-abd11c35-2b32.cloud.databricks.com
     variables:
