@@ -57,8 +57,10 @@ def _infer_bulletin(pdf):
 )
 @dp.expect_all(
     {
-        "side_known": "side IS NOT NULL",
-        "expiry_known": "expiry IS NOT NULL",
+        # Expired series (zero open interest) legitimately have no side, and
+        # far-wing minimum-tick series no expiry; anything else is a miss.
+        "side_known": "side IS NOT NULL OR inference_method = 'expired'",
+        "expiry_known": "expiry IS NOT NULL OR inference_method = 'moneyness'",
         "expiry_not_before_trade_date": "expiry IS NULL OR expiry >= trade_date",
         "forward_known": "forward IS NOT NULL",
     }

@@ -103,3 +103,17 @@ def test_options_expiring_on_trade_date_are_not_pushed_to_a_live_week(bulletin):
     assert [(x.method, x.side, x.expiry) for x in result] == [
         ("intrinsic", "C", TRADE_DATE), ("intrinsic", "C", TRADE_DATE),
     ]  # fmt: skip
+
+
+def test_series_expired_earlier_in_the_block_are_labelled_expired():
+    """Friday bulletin still lists Thursday's expired weekly: final settlement,
+    no delta, zero open interest."""
+    friday = date(2026, 11, 13)
+    monthly = [
+        OptionRow(**{**row(f"OG {n}", "JAN27", s, k, cal.monthly_expiry("JAN27")).__dict__})
+        for s, n in (("C", "CALL"), ("P", "PUT")) for k in range(3800, 4250, 25)
+    ]  # fmt: skip
+    gone = OptionRow(**{**row("GWR THU", "NOV26", "C", 3950, date(2026, 11, 19)).__dict__,
+                        "settle": 42.0, "delta": None, "open_interest": 0})  # fmt: skip
+    result = infer(monthly + [gone], friday)[-1]
+    assert (result.method, result.expiry, result.side) == ("expired", date(2026, 11, 12), None)

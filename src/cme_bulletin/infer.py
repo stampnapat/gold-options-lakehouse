@@ -50,7 +50,7 @@ class Inference:
     delta_error: float | None
     score: float | None
     score_margin: float | None  # gap to the best hypothesis that differs; low = unsure
-    method: str  # printed | model | intrinsic | moneyness (side only) | unresolved
+    method: str  # printed | model | intrinsic | expired | moneyness (side only) | unresolved
 
 
 def years_to(trade_date: date, expiry: date) -> float:
@@ -166,6 +166,8 @@ def infer(rows, trade_date: date) -> list[Inference]:
         dates = cal.weekly_expiries(product, month)
         live = [d for d in dates if d > trade_date]
         expiring = trade_date if trade_date in dates else None
+        past = [d for d in dates if d < trade_date]
+        expired_before = past[-1] if past else None
 
         # Block-level vol scale: weekly vols run below/above the monthly smile.
         scale = 1.0
@@ -209,11 +211,13 @@ def infer(rows, trade_date: date) -> list[Inference]:
                     used.add((h[1], h[2]))
                     chosen[i] = h
             for i in strike_idxs:
-                result[i] = _resolve(rows[i], chosen.get(i), hyps[i], curve, live, expiring)
+                result[i] = _resolve(
+                    rows[i], chosen.get(i), hyps[i], curve, live, expiring, expired_before
+                )
     return result  # type: ignore[return-value]
 
 
-def _resolve(row, chosen, hyps, curve, live, expiring) -> Inference:
+def _resolve(row, chosen, hyps, curve, live, expiring, expired_before) -> Inference:
     if chosen:
         score, side, expiry, underlying, forward, sigma, d_err = chosen
         others = [h[0] for h in hyps if (h[1], h[2]) != (side, expiry)]
@@ -224,6 +228,22 @@ def _resolve(row, chosen, hyps, curve, live, expiring) -> Inference:
         underlying = cal.underlying_for(expiring)
         return Inference(
             side, expiring, underlying, curve.get(underlying), None, None, None, None, "intrinsic"
+        )
+    # A series that expired on an earlier day of the block stays in the bulletin
+    # with its final settlement, no delta and zero open interest. Its side would
+    # need that day's futures price; with no open interest it carries no
+    # information, so only the expiry is recorded.
+    if expired_before and row.delta is None and row.open_interest == 0:
+        return Inference(
+            None,
+            expired_before,
+            cal.underlying_for(expired_before),
+            None,
+            None,
+            None,
+            None,
+            None,
+            "expired",
         )
     # Minimum-tick premium and no delta: far out of the money, so the side follows
     # from the strike, but nothing tells the expiries apart.
