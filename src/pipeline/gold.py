@@ -38,7 +38,8 @@ def strike_profile():
         "expiry > trade_date AND side IS NOT NULL"
     )
     by_strike = series.groupBy("trade_date", "expiry", "strike").agg(
-        F.first("product_code").alias("product_code"),
+        # "OG3 PUT" / "OG3 CALL" -> "OG3": this row covers both sides.
+        F.first(F.regexp_replace("product_code", " (PUT|CALL)$", "")).alias("product_code"),
         F.first("underlying").alias("underlying"),
         F.first("forward").alias("forward"),
         F.coalesce(_side("open_interest", "C"), F.lit(0)).alias("call_oi"),

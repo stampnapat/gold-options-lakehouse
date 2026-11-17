@@ -54,6 +54,10 @@ the next ten expiries, the ATM vol term structure, and the next-expiry levels ov
 time. Queries reference `schema.table` only; `dataset_catalog` points them at the
 target's catalog.
 
+The history chart joins bulletin dates with straight lines, so a missed download
+(no bulletin for 10-12 Nov 2026) looks like a smooth move; read it with the
+bulletin dates on the axis.
+
 The Free Edition SQL warehouse stops after 10 idle minutes. Widgets that load while
 it is still starting fail with *"The request could not be processed by the
 warehouse"*, and that failure is cached; press refresh once the warehouse is up
