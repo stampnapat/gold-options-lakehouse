@@ -81,6 +81,22 @@ to `main` then validates and deploys the bundle (`dev` target) with the
 | `gold.strike_profile` | calls and puts side by side per strike for every live expiry |
 | `gold.expiry_levels` | per trade date and expiry: forward, ATM vol, 1-3 SD bands, put/call walls inside 2 SD, max pain, GEX, gamma flip; `expiry_rank = 1` is the next day's daily option |
 
+| `gold.backtest_outcomes` | levels from a bulletin before expiry vs. the futures settlement on the expiry date (point in time) |
+| `gold.backtest_summary` | hit rates by days to expiry: inside 1/2 SD, inside the walls, max pain vs. forward, move size by gamma regime |
+
+### Backtest
+
+Each set of levels is scored against the futures settlement read from the bulletin
+**of the expiry date itself**; the levels only ever come from an earlier bulletin,
+so nothing from the future leaks in. Every (bulletin, expiry) pair with an
+expiry-date bulletin is used, and results are split by days to expiry. A
+simulation test checks that a correctly priced band scores 68% / 95%.
+
+Limits: the bulletin has settlements only, so the questions are close-to-close.
+The playbook's intraday setups (price outside 1 SD during the session, intraday
+volume pillars) need intraday data and are out of scope. Results need at least a
+month of uninterrupted bulletins before they mean anything.
+
 Levels are computed by `src/options_math/levels.py` (pure Python, unit tested).
 Vols are annualized on business days / 252; SD bands are lognormal around the
 forward. GEX assumes dealers are long calls and short puts (the common public
