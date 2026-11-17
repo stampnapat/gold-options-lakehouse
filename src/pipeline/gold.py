@@ -99,3 +99,101 @@ def expiry_levels_view():
         .groupBy("trade_date", "expiry")
         .applyInPandas(_levels, LEVELS_SCHEMA)
     )
+
+
+# ---------------------------------------------------------------- backtest ----
+
+OUTCOME_SCHEMA = (
+    "trade_date DATE, expiry DATE, expiry_rank INT, product_code STRING, underlying STRING, "
+    "business_days_to_expiry INT, forward DOUBLE, atm_vol DOUBLE, max_pain DOUBLE, "
+    "put_wall DOUBLE, call_wall DOUBLE, gamma_flip DOUBLE, settle DOUBLE, move DOUBLE, "
+    "move_sd DOUBLE, in_1sd BOOLEAN, in_2sd BOOLEAN, inside_walls BOOLEAN, "
+    "forward_error DOUBLE, max_pain_error DOUBLE, max_pain_closer BOOLEAN, "
+    "positive_gamma BOOLEAN"
+)
+OUTCOME_COLUMNS = [c.split()[0] for c in OUTCOME_SCHEMA.split(", ")]
+LEVEL_INPUTS = ["sd1_low", "sd1_high", "sd2_low", "sd2_high", "put_wall", "call_wall",
+                "max_pain", "gamma_flip"]  # fmt: skip
+
+
+def _outcomes(pdf):
+    """applyInPandas: score each set of levels against its expiry settlement."""
+    import pandas as pd
+
+    from options_math.backtest import evaluate
+
+    clean = pdf.astype(object).where(pdf.notna(), None)
+    rows = []
+    for r in clean.to_dict("records"):
+        scored = evaluate(
+            forward=r["forward"],
+            atm_vol=r["atm_vol"],
+            years=r["business_days_to_expiry"] / 252,
+            settle=r["settle"],
+            **{k: r[k] for k in LEVEL_INPUTS},
+        )
+        rows.append(r | scored)
+    return pd.DataFrame(rows).reindex(columns=OUTCOME_COLUMNS)
+
+
+@dp.materialized_view(
+    name=f"{CATALOG}.gold.backtest_outcomes",
+    comment=(
+        "Levels from a bulletin before expiry vs. the futures settlement read from the "
+        "expiry date's own bulletin (point in time). Only expiries with that bulletin."
+    ),
+    cluster_by=["expiry"],
+)
+def backtest_outcomes():
+    levels = spark.read.table(f"{CATALOG}.gold.expiry_levels")  # noqa: F821
+    # Settlement of each futures month on each bulletin date: the forward curve
+    # read off that day's monthly options.
+    settles = levels.groupBy("trade_date", "underlying").agg(F.first("forward").alias("settle"))
+    joined = levels.alias("l").join(
+        settles.alias("s"),
+        (F.col("s.trade_date") == F.col("l.expiry"))
+        & (F.col("s.underlying") == F.col("l.underlying")),
+    )
+    return (
+        joined.select("l.*", "s.settle")
+        .where("l.forward IS NOT NULL")
+        .groupBy("trade_date")
+        .applyInPandas(_outcomes, OUTCOME_SCHEMA)
+    )
+
+
+@dp.materialized_view(
+    name=f"{CATALOG}.gold.backtest_summary",
+    comment="Hit rates by days to expiry. A calibrated band holds ~68% (1 SD) / ~95% (2 SD).",
+)
+def backtest_summary():
+    horizon = (
+        F.when(F.col("business_days_to_expiry") == 1, "1 day")
+        .when(F.col("business_days_to_expiry") <= 3, "2-3 days")
+        .when(F.col("business_days_to_expiry") <= 5, "4-5 days")
+        .otherwise("6+ days")
+    )
+
+    def pct(col):
+        return F.round(100 * F.avg(F.col(col).cast("double")), 1)
+
+    return (
+        spark.read.table(f"{CATALOG}.gold.backtest_outcomes")  # noqa: F821
+        .withColumn("horizon", horizon)
+        .groupBy("horizon")
+        .agg(
+            F.count("*").alias("n"),
+            pct("in_1sd").alias("pct_in_1sd"),
+            pct("in_2sd").alias("pct_in_2sd"),
+            pct("inside_walls").alias("pct_inside_walls"),
+            pct("max_pain_closer").alias("pct_max_pain_closer_than_forward"),
+            F.round(F.avg("forward_error"), 1).alias("avg_forward_error"),
+            F.round(F.avg("max_pain_error"), 1).alias("avg_max_pain_error"),
+            F.round(F.avg(F.when(F.col("positive_gamma"), F.abs("move_sd"))), 2).alias(
+                "avg_abs_move_sd_positive_gamma"
+            ),
+            F.round(F.avg(F.when(~F.col("positive_gamma"), F.abs("move_sd"))), 2).alias(
+                "avg_abs_move_sd_negative_gamma"
+            ),
+        )
+    )
