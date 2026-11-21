@@ -46,6 +46,15 @@ def main() -> int:
     args = ap.parse_args()
 
     volume_dir = f"dbfs:/Volumes/{args.catalog}/bronze/landing/section64"
+    auth = subprocess.run(["databricks", "current-user", "me"], capture_output=True, text=True)
+    if auth.returncode != 0:
+        print(
+            "Databricks login has expired. Run:\n"
+            "  databricks auth login --host https://dbc-abd11c35-2b32.cloud.databricks.com"
+            " --profile DEFAULT\nthen run this script again.",
+            file=sys.stderr,
+        )
+        return 2
     subprocess.run(["databricks", "fs", "mkdir", volume_dir], check=True)
     present = existing(volume_dir)
 
